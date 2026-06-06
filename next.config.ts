@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Turbopack config (Next.js 16 default bundler)
-  // Empty object silences the webpack-config conflict error
-  turbopack: {},
+  turbopack: {
+    root: process.cwd(),
+  },
   async headers() {
     return [
       {

@@ -7,13 +7,14 @@ import { Check, CreditCard, Cpu, Landmark, ArrowRight, ShieldCheck } from "lucid
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function OnboardingPage() {
-  const { currentProfile, onboard, globalConfig, deviceFingerprint, isLoading } = useDrm();
+  const { currentProfile, onboard, deviceFingerprint, isLoading } = useDrm();
   const router = useRouter();
 
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [gstin, setGstin] = useState("");
+  const [subscriptionTier, setSubscriptionTier] = useState<"Silver" | "Gold" | "Platinum">("Gold");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Validate state access
@@ -88,6 +89,7 @@ export default function OnboardingPage() {
         companyName,
         email,
         gstin: gstin.toUpperCase(),
+        subscriptionTier,
       });
       router.push("/dashboard");
     } catch (err: unknown) {
@@ -203,48 +205,89 @@ export default function OnboardingPage() {
               className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-6 space-y-4"
             >
               <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-cyan-400" /> Step 2: License Pricing Structure
+                <CreditCard className="h-5 w-5 text-cyan-400" /> Step 2: Choose Subscription Tier
               </h2>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Confirm your contract base variables. These amounts are automatically compiled onto Razorpay payment ledgers.
+                Select your Sentinel Cinema license plan. All invoices are settled in Indian Rupees (₹) via direct bank settlement.
               </p>
 
-              <div className="grid grid-cols-3 gap-3 pt-3">
-                <div className="bg-zinc-950 p-3 rounded border border-zinc-800 text-center">
-                  <div className="text-[10px] uppercase text-zinc-500">Base Retainer</div>
-                  <div className="text-base font-bold text-cyan-400 mt-1">
-                    ${globalConfig.base_retainer_price}
-                  </div>
-                  <div className="text-[8px] text-zinc-500">per movie / month</div>
+              <div className="space-y-3 pt-2">
+                {[
+                  {
+                    id: "Silver",
+                    name: "Silver DRM Retainer",
+                    price: "₹1,25,000",
+                    desc: "Basic Canvas watermarking, standard browser tracking",
+                    features: ["₹10,000 per screen tracked", "₹25,000 bounty offset"]
+                  },
+                  {
+                    id: "Gold",
+                    name: "Gold Advanced DRM",
+                    price: "₹3,00,000",
+                    desc: "Steganographic watermarking, push notifications",
+                    features: ["₹20,000 per screen tracked", "₹60,000 bounty offset"]
+                  },
+                  {
+                    id: "Platinum",
+                    name: "Platinum Enterprise DRM",
+                    price: "₹7,50,000",
+                    desc: "WASM FFmpeg rendering, manual decoder integration",
+                    features: ["₹40,000 per screen tracked", "₹1,50,000 bounty offset"]
+                  }
+                ].map((plan) => {
+                  const isSelected = subscriptionTier === plan.id;
+                  return (
+                    <div
+                      key={plan.id}
+                      onClick={() => setSubscriptionTier(plan.id as "Silver" | "Gold" | "Platinum")}
+                      className={`cursor-pointer p-4 rounded-xl border text-left transition ${
+                        isSelected 
+                          ? "border-cyan-500 bg-cyan-950/20 shadow-[0_0_15px_rgba(6,182,212,0.1)]" 
+                          : "border-zinc-800 bg-zinc-950/50 hover:border-zinc-700"
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                            plan.id === "Platinum" ? "bg-purple-950 text-purple-400 border border-purple-800" :
+                            plan.id === "Gold" ? "bg-cyan-950 text-cyan-400 border border-cyan-800" :
+                            "bg-zinc-900 text-zinc-400 border border-zinc-800"
+                          }`}>
+                            {plan.id} Plan
+                          </span>
+                          <h3 className="text-xs font-bold text-white mt-1.5">{plan.name}</h3>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">{plan.desc}</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-extrabold text-cyan-400">{plan.price}</span>
+                          <span className="text-[8px] text-zinc-500 block">per movie / month</span>
+                        </div>
+                      </div>
+                      <div className="mt-2.5 grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] text-zinc-400 border-t border-zinc-900 pt-2">
+                        {plan.features.map((f, i) => (
+                          <div key={i} className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+                            <span>{f}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="bg-zinc-950 p-3 rounded border border-zinc-850 text-xs space-y-1">
+                <div className="flex justify-between text-zinc-500">
+                  <span>Billing currency:</span>
+                  <span className="text-zinc-300 font-semibold font-mono">INR (₹)</span>
                 </div>
-                <div className="bg-zinc-950 p-3 rounded border border-zinc-800 text-center">
-                  <div className="text-[10px] uppercase text-zinc-500">Screen Telemetry</div>
-                  <div className="text-base font-bold text-cyan-400 mt-1">
-                    ${globalConfig.screen_fee_price}
-                  </div>
-                  <div className="text-[8px] text-zinc-500">per screen actively tracked</div>
-                </div>
-                <div className="bg-zinc-950 p-3 rounded border border-zinc-800 text-center">
-                  <div className="text-[10px] uppercase text-zinc-500">Bounty Rewards</div>
-                  <div className="text-base font-bold text-emerald-400 mt-1">
-                    ${globalConfig.bounty_reward_price}
-                  </div>
-                  <div className="text-[8px] text-zinc-500">per verified pirate leak</div>
+                <div className="flex justify-between text-zinc-500">
+                  <span>Settlement method:</span>
+                  <span className="text-cyan-400 font-semibold">Direct Bank Transfer</span>
                 </div>
               </div>
 
-              <div className="bg-zinc-950 p-4 rounded border border-zinc-800 mt-4 text-xs space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Onboarding Status:</span>
-                  <span className="text-zinc-300 font-semibold">Active Client Trial</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Free Ingestion Credits:</span>
-                  <span className="text-emerald-400 font-semibold font-mono">2 Watermarks Remaining</span>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setStep(1)}
                   className="flex-1 py-2 rounded bg-zinc-950 border border-zinc-800 hover:bg-zinc-900 text-zinc-300 text-sm font-semibold transition"

@@ -11,6 +11,7 @@ export default function LoginPage() {
   const router = useRouter();
   
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [isAbused, setIsAbused] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -65,7 +66,7 @@ export default function LoginPage() {
     // Simulate verification delay
     setTimeout(async () => {
       try {
-        const profile = await login(email);
+        const profile = await login(email, password);
         setLogs(prev => [...prev, "HANDSHAKE COMPLETED. PROFILE AUTHENTICATED."]);
         
         if (profile.onboarding_completed) {
@@ -73,14 +74,31 @@ export default function LoginPage() {
         } else {
           router.push("/onboarding");
         }
-      } catch {
-        setIsAbused(true);
-        setLogs(prev => [
-          ...prev,
-          "❌ HANDSHAKE ABORTED.",
-          `CRITICAL: DEVICE HARDWARE FINGERPRINT MATCHES ABUSE_LOCKED SIGNATURE.`,
-          "FIREWALL ACTIVE: LOCAL PORT SUSPENDED."
-        ]);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg.includes("AUTHENTICATION_FAILED")) {
+          setLogs(prev => [
+            ...prev,
+            "❌ HANDSHAKE ABORTED.",
+            "ERROR: INVALID SECURE PASSWORD SIGNATURE.",
+          ]);
+          alert("Invalid password credentials. Please try again.");
+        } else if (errMsg.includes("SECURITY_VIOLATION")) {
+          setIsAbused(true);
+          setLogs(prev => [
+            ...prev,
+            "❌ HANDSHAKE ABORTED.",
+            `CRITICAL: DEVICE HARDWARE FINGERPRINT MATCHES ABUSE_LOCKED SIGNATURE.`,
+            "FIREWALL ACTIVE: LOCAL PORT SUSPENDED."
+          ]);
+        } else {
+          setLogs(prev => [
+            ...prev,
+            "❌ HANDSHAKE ABORTED.",
+            `ERROR: ${errMsg}`,
+          ]);
+          alert(`Login handshake failed: ${errMsg}`);
+        }
       } finally {
         setIsVerifying(false);
       }
@@ -92,8 +110,8 @@ export default function LoginPage() {
       {/* Decorative Grid Lines */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
       
-      {/* Laser light scan effects */}
-      <div className={`absolute left-0 right-0 h-[2px] pointer-events-none opacity-40 bg-gradient-to-r from-transparent via-cyan-500 to-transparent animate-pulse top-1/4 ${isAbused && "via-red-500"}`} />
+      {/* Laser light scan effects - positioned at bottom to avoid brand name overlap */}
+      <div className={`absolute left-0 right-0 h-[2px] pointer-events-none opacity-30 bg-gradient-to-r from-transparent via-cyan-500 to-transparent bottom-1/4 ${isAbused && "via-red-500"}`} />
       
       <div className="w-full max-w-lg z-10">
         
@@ -171,7 +189,7 @@ export default function LoginPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label htmlFor="email" className="block text-xs font-semibold tracking-wider text-zinc-400 uppercase mb-2">
-                    Corporate Access Gateway
+                    Corporate Email Address
                   </label>
                   <div className="relative">
                     <input
@@ -181,11 +199,29 @@ export default function LoginPage() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="e.g. producer@kiteandtail.com"
                       required
+                      className="w-full bg-zinc-950 border border-zinc-850 rounded-lg px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition font-mono text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="password" className="block text-xs font-semibold tracking-wider text-zinc-400 uppercase mb-2">
+                    Gateway Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter account password"
+                      required
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition font-mono text-sm"
                     />
                   </div>
                   <p className="text-[10px] text-zinc-500 mt-2">
-                    Type <code className="text-red-400 select-all">abuser@flagged.com</code> to simulate Crimson Red lock behavior.
+                    Default demo passwords: Client (<code className="text-cyan-400 font-mono select-all">sentinel123</code>), Admin (<code className="text-cyan-400 font-mono select-all">admin123</code>).
+                    For new signups, the password entered here will be saved to your profile.
                   </p>
                 </div>
 

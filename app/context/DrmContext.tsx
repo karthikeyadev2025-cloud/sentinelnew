@@ -2,17 +2,20 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import fpjs from "@fingerprintjs/fingerprintjs";
 
 // Types corresponding to Supabase schemas
 export interface Profile {
   id: string;
   email: string;
+  password?: string;
   role: "STUDIO_CLIENT" | "SUPER_ADMIN";
   onboarding_completed: boolean;
   trial_uses_remaining: number;
   device_fingerprint_hash: string;
   company_name?: string;
   gstin?: string;
+  subscription_tier?: "Silver" | "Gold" | "Platinum";
 }
 
 export interface Movie {
@@ -43,7 +46,9 @@ export interface BillingLedger {
   base_retainer_due: number;
   screen_fees: number;
   bounty_rewards: number;
-  payment_status: "Unpaid" | "Paid_Razorpay";
+  payment_status: "Unpaid" | "Paid_Razorpay" | "Paid_Bank" | "Verification_Pending";
+  bank_utr?: string;
+  bank_receipt_url?: string;
   created_at: string;
 }
 
@@ -52,6 +57,13 @@ export interface GlobalConfig {
   screen_fee_price: number;
   bounty_reward_price: number;
   css_primary_color: string;
+  // Bank settlement details (set by admin, displayed to clients)
+  bank_name: string;
+  bank_account_holder: string;
+  bank_account_number: string;
+  bank_ifsc_code: string;
+  bank_upi_id: string;
+  bank_branch_name: string;
 }
 
 interface DrmContextType {
@@ -64,22 +76,31 @@ interface DrmContextType {
   globalConfig: GlobalConfig;
   deviceFingerprint: string;
   isLoading: boolean;
-  login: (email: string) => Promise<Profile>;
-  onboard: (data: { companyName: string; email: string; gstin: string }) => Promise<void>;
+  login: (email: string, password?: string) => Promise<Profile>;
+  onboard: (data: { companyName: string; email: string; gstin: string; subscriptionTier: "Silver" | "Gold" | "Platinum" }) => Promise<void>;
   logout: () => void;
   addMovie: (title: string) => Promise<Movie>;
   simulateLeak: (movieId: string, chainName: string, city: string, screenNumber: string, payload: string) => Promise<void>;
   dispatchTakedown: (alertId: string) => Promise<void>;
   settleInvoice: (ledgerId: string) => Promise<void>;
+  submitBankTransfer: (ledgerId: string, utr: string, receiptUrl: string) => Promise<void>;
+  approveBankTransfer: (ledgerId: string) => Promise<void>;
   updateGlobalConfig: (config: Partial<GlobalConfig>) => Promise<void>;
   resetAllData: () => void;
 }
 
 const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
-  base_retainer_price: 5000,
-  screen_fee_price: 250,
-  bounty_reward_price: 1200,
+  base_retainer_price: 300000,
+  screen_fee_price: 20000,
+  bounty_reward_price: 60000,
   css_primary_color: "#3b82f6", // Electric Blue
+  // Bank Details (Admin configurable)
+  bank_name: "HDFC Bank",
+  bank_account_holder: "Kite & Tail Cybersecurity Pvt. Ltd.",
+  bank_account_number: "50200093847561",
+  bank_ifsc_code: "HDFC0001234",
+  bank_upi_id: "kiteandtail@hdfcbank",
+  bank_branch_name: "Bandra Kurla Complex, Mumbai",
 };
 
 const DrmContext = createContext<DrmContextType | undefined>(undefined);
@@ -99,22 +120,34 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
   // Generate browser fingerprint hash
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const generateFingerprint = () => {
-        const navigator_info = window.navigator.userAgent + window.navigator.language;
-        const screen_info = window.screen.width + "x" + window.screen.height + "x" + window.screen.colorDepth;
-        let hash = 0;
-        const input = navigator_info + screen_info;
-        for (let i = 0; i < input.length; i++) {
-          const char = input.charCodeAt(i);
-          hash = (hash << 5) - hash + char;
-          hash = hash & hash;
+      let isMounted = true;
+      const loadFp = async () => {
+        try {
+          const fp = await fpjs.load();
+          const result = await fp.get();
+          if (isMounted) {
+            setDeviceFingerprint("FP_" + result.visitorId.toUpperCase());
+          }
+        } catch (err) {
+          console.warn("FingerprintJS load failed, falling back to basic hash.", err);
+          const navigator_info = window.navigator.userAgent + window.navigator.language;
+          const screen_info = window.screen.width + "x" + window.screen.height + "x" + window.screen.colorDepth;
+          let hash = 0;
+          const input = navigator_info + screen_info;
+          for (let i = 0; i < input.length; i++) {
+            const char = input.charCodeAt(i);
+            hash = (hash << 5) - hash + char;
+            hash = hash & hash;
+          }
+          if (isMounted) {
+            setDeviceFingerprint("FP_" + Math.abs(hash).toString(16).toUpperCase());
+          }
         }
-        return "FP_" + Math.abs(hash).toString(16).toUpperCase();
       };
-      const timer = setTimeout(() => {
-        setDeviceFingerprint(generateFingerprint());
-      }, 0);
-      return () => clearTimeout(timer);
+      loadFp();
+      return () => {
+        isMounted = false;
+      };
     }
   }, []);
 
@@ -158,32 +191,50 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
     const localProfiles = localStorage.getItem("drm_profiles");
     const defaultProfiles: Profile[] = [
       {
-        id: "prof_client_1",
-        email: "producer@kiteandtail.com",
+        id: "prof_demo_client",
+        email: "demo@kiteandtail.com",
+        password: "sentinel123",
         role: "STUDIO_CLIENT",
         onboarding_completed: true,
-        trial_uses_remaining: 2,
+        trial_uses_remaining: 999,
+        device_fingerprint_hash: "FP_DEMO_OK",
+        company_name: "Kite & Tail Demo",
+        gstin: "27AAAAA3333C1Z3",
+        subscription_tier: "Platinum",
+      },
+      {
+        id: "prof_client_1",
+        email: "producer@kiteandtail.com",
+        password: "sentinel123",
+        role: "STUDIO_CLIENT",
+        onboarding_completed: true,
+        trial_uses_remaining: 1,
         device_fingerprint_hash: "FP_CLIENT_OK",
         company_name: "Kite & Tail Studios",
         gstin: "27AAAAA1111A1Z1",
+        subscription_tier: "Gold",
       },
       {
         id: "prof_admin_1",
         email: "admin@kiteandtail.com",
+        password: "admin123",
         role: "SUPER_ADMIN",
         onboarding_completed: true,
-        trial_uses_remaining: 99,
+        trial_uses_remaining: 0,
         device_fingerprint_hash: "FP_ADMIN_OK",
         company_name: "Kite & Tail Ops",
         gstin: "27AAAAA2222B1Z2",
+        subscription_tier: "Platinum",
       },
       {
         id: "prof_abused",
         email: "abuser@flagged.com",
+        password: "sentinel123",
         role: "STUDIO_CLIENT",
         onboarding_completed: false,
         trial_uses_remaining: 0,
         device_fingerprint_hash: "FP_ABUSE_LOCKED",
+        subscription_tier: "Gold",
       },
     ];
     if (localProfiles) {
@@ -249,18 +300,18 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
     const defaultLedgers: BillingLedger[] = [
       {
         id: "led_1",
-        base_retainer_due: 5000,
-        screen_fees: 500,
-        bounty_rewards: 1200,
+        base_retainer_due: 300000,
+        screen_fees: 40000,
+        bounty_rewards: 60000,
         payment_status: "Unpaid",
         created_at: new Date(Date.now() - 86400000).toISOString(),
       },
       {
         id: "led_2",
-        base_retainer_due: 5000,
-        screen_fees: 250,
+        base_retainer_due: 300000,
+        screen_fees: 20000,
         bounty_rewards: 0,
-        payment_status: "Paid_Razorpay",
+        payment_status: "Paid_Bank",
         created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
       },
     ];
@@ -289,6 +340,16 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
 
         if (configError) {
           throw new Error("Supabase tables not initialized. Activating localStorage mode.");
+        }
+
+        // Verify that the profiles table has the schema columns password and subscription_tier
+        const { error: schemaCheckError } = await supabase
+          .from("profiles")
+          .select("password, subscription_tier")
+          .limit(1);
+
+        if (schemaCheckError) {
+          throw new Error("Supabase profiles table schema is outdated/incomplete. Activating localStorage mode.");
         }
 
         if (configData) {
@@ -398,7 +459,7 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Login handler
-  const login = async (email: string): Promise<Profile> => {
+  const login = async (email: string, password?: string): Promise<Profile> => {
     let targetFingerprint = deviceFingerprint;
     if (email.toLowerCase() === "abuser@flagged.com") {
       targetFingerprint = "FP_ABUSE_LOCKED";
@@ -415,13 +476,20 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
         matchedProfile = {
           id: "prof_" + Math.random().toString(36).substring(2, 9),
           email,
+          password: password || "sentinel123",
           role: "STUDIO_CLIENT",
           onboarding_completed: false,
-          trial_uses_remaining: 2,
+          trial_uses_remaining: 1,
           device_fingerprint_hash: targetFingerprint,
+          subscription_tier: "Gold",
         };
         syncLocalProfiles([...profiles, matchedProfile]);
       } else {
+        const storedPassword = matchedProfile.password || "sentinel123";
+        const submittedPassword = password || "sentinel123";
+        if (storedPassword !== submittedPassword) {
+          throw new Error("AUTHENTICATION_FAILED: Invalid password credentials.");
+        }
         matchedProfile.device_fingerprint_hash = targetFingerprint;
         syncLocalProfiles(profiles.map((p) => (p.id === matchedProfile!.id ? matchedProfile! : p)));
       }
@@ -446,9 +514,10 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
         .from("profiles")
         .insert({
           email: email.toLowerCase(),
+          password: password || "sentinel123",
           role: "STUDIO_CLIENT",
           onboarding_completed: false,
-          trial_uses_remaining: 2,
+          trial_uses_remaining: 1,
           device_fingerprint_hash: targetFingerprint,
         })
         .select()
@@ -457,6 +526,13 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
       if (insertError) throw new Error(insertError.message);
       finalProfile = inserted;
     } else {
+      // Verify password
+      const storedPassword = matched.password || "sentinel123";
+      const submittedPassword = password || "sentinel123";
+      if (storedPassword !== submittedPassword) {
+        throw new Error("AUTHENTICATION_FAILED: Invalid password credentials.");
+      }
+
       // Check block condition on fetched profile
       if (matched.device_fingerprint_hash === "FP_ABUSE_LOCKED") {
         throw new Error("SECURITY_VIOLATION: Device hardware fingerprint is flag-locked due to terms abuse.");
@@ -484,7 +560,7 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Complete onboarding
-  const onboard = async (data: { companyName: string; email: string; gstin: string }) => {
+  const onboard = async (data: { companyName: string; email: string; gstin: string; subscriptionTier: "Silver" | "Gold" | "Platinum" }) => {
     if (!currentProfile) throw new Error("No active session");
 
     if (useFallback) {
@@ -492,6 +568,7 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
         ...currentProfile,
         company_name: data.companyName,
         gstin: data.gstin,
+        subscription_tier: data.subscriptionTier,
         onboarding_completed: true,
       };
       syncLocalProfiles(profiles.map((p) => (p.id === currentProfile.id ? updatedProfile : p)));
@@ -506,6 +583,7 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
       .update({
         company_name: data.companyName,
         gstin: data.gstin,
+        subscription_tier: data.subscriptionTier,
         onboarding_completed: true,
       })
       .eq("id", currentProfile.id)
@@ -529,6 +607,27 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
 
   // Register movie
   const addMovie = async (title: string): Promise<Movie> => {
+    const isTrial = currentProfile && currentProfile.trial_uses_remaining > 0;
+    
+    const tier = currentProfile?.subscription_tier || "Gold";
+    let baseRetainer = isTrial ? 0 : globalConfig.base_retainer_price;
+    let screenFee = isTrial ? 0 : globalConfig.screen_fee_price;
+    
+    if (!isTrial) {
+      if (tier === "Silver") {
+        baseRetainer = 125000;
+        screenFee = 10000;
+      } else if (tier === "Platinum") {
+        baseRetainer = 750000;
+        screenFee = 40000;
+      }
+    }
+
+    // Decrement trial count
+    const updatedTrialCount = (currentProfile && currentProfile.trial_uses_remaining > 0)
+      ? currentProfile.trial_uses_remaining - 1
+      : (currentProfile?.trial_uses_remaining ?? 0);
+
     if (useFallback) {
       const newMovie: Movie = {
         id: "mov_" + Math.random().toString(36).substring(2, 9),
@@ -539,12 +638,20 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
       setMovies(updated);
       localStorage.setItem("drm_movies", JSON.stringify(updated));
 
+      // Update current profile trial count
+      if (currentProfile) {
+        const updatedProfile = { ...currentProfile, trial_uses_remaining: updatedTrialCount };
+        setCurrentProfile(updatedProfile);
+        sessionStorage.setItem("drm_current_profile", JSON.stringify(updatedProfile));
+        syncLocalProfiles(profiles.map(p => p.id === currentProfile.id ? updatedProfile : p));
+      }
+
       const newLedger: BillingLedger = {
         id: "led_" + Math.random().toString(36).substring(2, 9),
-        base_retainer_due: globalConfig.base_retainer_price,
-        screen_fees: globalConfig.screen_fee_price * 2,
+        base_retainer_due: baseRetainer,
+        screen_fees: isTrial ? 0 : screenFee * 2,
         bounty_rewards: 0,
-        payment_status: "Unpaid",
+        payment_status: isTrial ? "Paid_Bank" : "Unpaid",
         created_at: new Date().toISOString(),
       };
       const updatedLedgers = [...billingLedgers, newLedger];
@@ -562,14 +669,35 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
 
     if (err1) throw new Error(err1.message);
 
+    // Update trial count in DB
+    if (currentProfile) {
+      await supabase
+        .from("profiles")
+        .update({ trial_uses_remaining: updatedTrialCount })
+        .eq("id", currentProfile.id);
+      
+      const { data: freshProf } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", currentProfile.id)
+        .maybeSingle();
+      if (freshProf) {
+        setCurrentProfile(freshProf);
+        sessionStorage.setItem("drm_current_profile", JSON.stringify(freshProf));
+      }
+    }
+
     await supabase.from("billing_ledgers").insert({
-      base_retainer_due: globalConfig.base_retainer_price,
-      screen_fees: globalConfig.screen_fee_price * 2,
+      base_retainer_due: baseRetainer,
+      screen_fees: isTrial ? 0 : screenFee * 2,
       bounty_rewards: 0,
-      payment_status: "Unpaid",
+      payment_status: isTrial ? "Paid_Bank" : "Unpaid",
     });
 
     // Refresh states
+    const { data: refreshedProfs } = await supabase.from("profiles").select("*");
+    if (refreshedProfs) setProfiles(refreshedProfs);
+
     const { data: refreshedMovs } = await supabase.from("movies").select("*");
     if (refreshedMovs) setMovies(refreshedMovs);
 
@@ -623,7 +751,11 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
       const activeLedgerIndex = billingLedgers.findIndex((l) => l.payment_status === "Unpaid");
       if (activeLedgerIndex > -1) {
         const updatedLedgers = [...billingLedgers];
-        updatedLedgers[activeLedgerIndex].bounty_rewards += globalConfig.bounty_reward_price;
+        const tier = currentProfile?.subscription_tier || "Gold";
+        let bountyReward = 60000;
+        if (tier === "Silver") bountyReward = 25000;
+        else if (tier === "Platinum") bountyReward = 150000;
+        updatedLedgers[activeLedgerIndex].bounty_rewards += bountyReward;
         setBillingLedgers(updatedLedgers);
         localStorage.setItem("drm_ledgers", JSON.stringify(updatedLedgers));
       }
@@ -680,6 +812,11 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 4. Update Unpaid ledgers
+    const tier = currentProfile?.subscription_tier || "Gold";
+    let bountyReward = 60000;
+    if (tier === "Silver") bountyReward = 25000;
+    else if (tier === "Platinum") bountyReward = 150000;
+
     const { data: ledgersToUpdate } = await supabase
       .from("billing_ledgers")
       .select("*")
@@ -689,7 +826,7 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
       for (const led of ledgersToUpdate) {
         await supabase
           .from("billing_ledgers")
-          .update({ bounty_rewards: led.bounty_rewards + globalConfig.bounty_reward_price })
+          .update({ bounty_rewards: led.bounty_rewards + bountyReward })
           .eq("id", led.id);
       }
     }
@@ -784,6 +921,63 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
     if (refreshedLeds) setBillingLedgers(refreshedLeds);
   };
 
+  const submitBankTransfer = async (ledgerId: string, utr: string, receiptUrl: string) => {
+    if (useFallback) {
+      const updatedLedgers = billingLedgers.map((l) =>
+        l.id === ledgerId
+          ? {
+              ...l,
+              payment_status: "Verification_Pending" as const,
+              bank_utr: utr,
+              bank_receipt_url: receiptUrl,
+            }
+          : l
+      );
+      setBillingLedgers(updatedLedgers);
+      localStorage.setItem("drm_ledgers", JSON.stringify(updatedLedgers));
+      return;
+    }
+
+    // Supabase Mode
+    const { error } = await supabase
+      .from("billing_ledgers")
+      .update({
+        payment_status: "Verification_Pending",
+        bank_utr: utr,
+        bank_receipt_url: receiptUrl,
+      })
+      .eq("id", ledgerId);
+
+    if (error) throw new Error(error.message);
+
+    // Refresh state
+    const { data: refreshedLeds } = await supabase.from("billing_ledgers").select("*");
+    if (refreshedLeds) setBillingLedgers(refreshedLeds);
+  };
+
+  const approveBankTransfer = async (ledgerId: string) => {
+    if (useFallback) {
+      const updatedLedgers = billingLedgers.map((l) =>
+        l.id === ledgerId ? { ...l, payment_status: "Paid_Bank" as const } : l
+      );
+      setBillingLedgers(updatedLedgers);
+      localStorage.setItem("drm_ledgers", JSON.stringify(updatedLedgers));
+      return;
+    }
+
+    // Supabase Mode
+    const { error } = await supabase
+      .from("billing_ledgers")
+      .update({ payment_status: "Paid_Bank" })
+      .eq("id", ledgerId);
+
+    if (error) throw new Error(error.message);
+
+    // Refresh state
+    const { data: refreshedLeds } = await supabase.from("billing_ledgers").select("*");
+    if (refreshedLeds) setBillingLedgers(refreshedLeds);
+  };
+
   // Update Global SaaS pricing config
   const updateGlobalConfig = async (config: Partial<GlobalConfig>) => {
     if (useFallback) {
@@ -842,6 +1036,8 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
         simulateLeak,
         dispatchTakedown,
         settleInvoice,
+        submitBankTransfer,
+        approveBankTransfer,
         updateGlobalConfig,
         resetAllData,
       }}
