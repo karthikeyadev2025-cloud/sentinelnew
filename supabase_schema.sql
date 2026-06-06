@@ -1,5 +1,9 @@
--- Sentinel Cinema DRM Database Schema
--- Run this in your Supabase SQL Editor to provision tables and seed initial data.
+-- ============================================================
+-- Sentinel Cinema DRM — Database Schema
+-- Safe to run on BOTH fresh and existing Supabase deployments.
+-- All CREATE statements use IF NOT EXISTS.
+-- All policies use DROP IF EXISTS before CREATE (idempotent).
+-- ============================================================
 
 -- 1. Profiles Table
 CREATE TABLE IF NOT EXISTS profiles (
@@ -56,14 +60,13 @@ CREATE TABLE IF NOT EXISTS billing_ledgers (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 6. Global Configuration Table
+-- 6. Global Configuration Table (single-row config)
 CREATE TABLE IF NOT EXISTS global_config (
-  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- Enforce single config row
+  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   base_retainer_price NUMERIC DEFAULT 300000,
   screen_fee_price NUMERIC DEFAULT 20000,
   bounty_reward_price NUMERIC DEFAULT 60000,
   css_primary_color TEXT DEFAULT '#3b82f6',
-  -- Bank settlement details (displayed to clients in billing dashboard)
   bank_name TEXT DEFAULT 'HDFC Bank',
   bank_account_holder TEXT DEFAULT 'Kite & Tail Cybersecurity Pvt. Ltd.',
   bank_account_number TEXT DEFAULT '50200093847561',
@@ -72,7 +75,7 @@ CREATE TABLE IF NOT EXISTS global_config (
   bank_branch_name TEXT DEFAULT 'Bandra Kurla Complex, Mumbai'
 );
 
--- If global_config table already exists (existing deployments), add bank columns safely:
+-- Safely add bank columns to existing deployments (no-op if already present)
 ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_name TEXT DEFAULT 'HDFC Bank';
 ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_account_holder TEXT DEFAULT 'Kite & Tail Cybersecurity Pvt. Ltd.';
 ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_account_number TEXT DEFAULT '50200093847561';
@@ -80,12 +83,9 @@ ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_ifsc_code TEXT DEFAULT '
 ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_upi_id TEXT DEFAULT 'kiteandtail@hdfcbank';
 ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_branch_name TEXT DEFAULT 'Bandra Kurla Complex, Mumbai';
 
--- Seed Initial Global Config
-INSERT INTO global_config (id, base_retainer_price, screen_fee_price, bounty_reward_price, css_primary_color, bank_name, bank_account_holder, bank_account_number, bank_ifsc_code, bank_upi_id, bank_branch_name)
-VALUES (1, 300000, 20000, 60000, '#3b82f6', 'HDFC Bank', 'Kite & Tail Cybersecurity Pvt. Ltd.', '50200093847561', 'HDFC0001234', 'kiteandtail@hdfcbank', 'Bandra Kurla Complex, Mumbai')
-ON CONFLICT (id) DO NOTHING;
-
--- Row Level Security (RLS) Configurations
+-- ============================================================
+-- Row Level Security
+-- ============================================================
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE movies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE theatre_screens ENABLE ROW LEVEL SECURITY;
@@ -93,7 +93,22 @@ ALTER TABLE leak_alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing_ledgers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE global_config ENABLE ROW LEVEL SECURITY;
 
--- Allow Public/Anon access to all tables (for demo/development convenience)
+-- Drop existing policies first so this script is safe to re-run
+DROP POLICY IF EXISTS "Public Read Access" ON profiles;
+DROP POLICY IF EXISTS "Public Read Access" ON movies;
+DROP POLICY IF EXISTS "Public Read Access" ON theatre_screens;
+DROP POLICY IF EXISTS "Public Read Access" ON leak_alerts;
+DROP POLICY IF EXISTS "Public Read Access" ON billing_ledgers;
+DROP POLICY IF EXISTS "Public Read Access" ON global_config;
+
+DROP POLICY IF EXISTS "Public All Operations" ON profiles;
+DROP POLICY IF EXISTS "Public All Operations" ON movies;
+DROP POLICY IF EXISTS "Public All Operations" ON theatre_screens;
+DROP POLICY IF EXISTS "Public All Operations" ON leak_alerts;
+DROP POLICY IF EXISTS "Public All Operations" ON billing_ledgers;
+DROP POLICY IF EXISTS "Public All Operations" ON global_config;
+
+-- Recreate policies (public access for demo/development)
 CREATE POLICY "Public Read Access" ON profiles FOR SELECT USING (true);
 CREATE POLICY "Public Read Access" ON movies FOR SELECT USING (true);
 CREATE POLICY "Public Read Access" ON theatre_screens FOR SELECT USING (true);
@@ -108,16 +123,29 @@ CREATE POLICY "Public All Operations" ON leak_alerts FOR ALL USING (true);
 CREATE POLICY "Public All Operations" ON billing_ledgers FOR ALL USING (true);
 CREATE POLICY "Public All Operations" ON global_config FOR ALL USING (true);
 
--- Seed Initial Global Config
-INSERT INTO global_config (id, base_retainer_price, screen_fee_price, bounty_reward_price, css_primary_color)
-VALUES (1, 300000, 20000, 60000, '#3b82f6')
-ON CONFLICT (id) DO NOTHING;
+-- ============================================================
+-- Seed Data (ON CONFLICT = safe to re-run, no duplicates)
+-- ============================================================
+
+-- Seed Global Config (with bank details)
+INSERT INTO global_config (
+  id, base_retainer_price, screen_fee_price, bounty_reward_price, css_primary_color,
+  bank_name, bank_account_holder, bank_account_number,
+  bank_ifsc_code, bank_upi_id, bank_branch_name
+) VALUES (
+  1, 300000, 20000, 60000, '#3b82f6',
+  'HDFC Bank', 'Kite & Tail Cybersecurity Pvt. Ltd.', '50200093847561',
+  'HDFC0001234', 'kiteandtail@hdfcbank', 'Bandra Kurla Complex, Mumbai'
+) ON CONFLICT (id) DO NOTHING;
 
 -- Seed Default Profiles
-INSERT INTO profiles (email, password, role, onboarding_completed, trial_uses_remaining, device_fingerprint_hash, company_name, gstin, subscription_tier)
-VALUES 
-  ('demo@kiteandtail.com', 'sentinel123', 'STUDIO_CLIENT', TRUE, 999, 'FP_DEMO_OK', 'Kite & Tail Demo', '27AAAAA3333C1Z3', 'Platinum'),
+INSERT INTO profiles (
+  email, password, role, onboarding_completed,
+  trial_uses_remaining, device_fingerprint_hash,
+  company_name, gstin, subscription_tier
+) VALUES
+  ('demo@kiteandtail.com', 'sentinel123', 'STUDIO_CLIENT', TRUE,  999, 'FP_DEMO_OK',   'Kite & Tail Demo',   '27AAAAA3333C1Z3', 'Platinum'),
   ('producer@kiteandtail.com', 'sentinel123', 'STUDIO_CLIENT', TRUE, 1, 'FP_CLIENT_OK', 'Kite & Tail Studios', '27AAAAA1111A1Z1', 'Gold'),
-  ('admin@kiteandtail.com', 'admin123', 'SUPER_ADMIN', TRUE, 0, 'FP_ADMIN_OK', 'Kite & Tail Ops', '27AAAAA2222B1Z2', 'Platinum'),
-  ('abuser@flagged.com', 'sentinel123', 'STUDIO_CLIENT', FALSE, 0, 'FP_ABUSE_LOCKED', NULL, NULL, 'Gold')
+  ('admin@kiteandtail.com',    'admin123',    'SUPER_ADMIN',   TRUE, 0, 'FP_ADMIN_OK',  'Kite & Tail Ops',    '27AAAAA2222B1Z2', 'Platinum'),
+  ('abuser@flagged.com',       'sentinel123', 'STUDIO_CLIENT', FALSE,0, 'FP_ABUSE_LOCKED', NULL, NULL, 'Gold')
 ON CONFLICT (email) DO NOTHING;
