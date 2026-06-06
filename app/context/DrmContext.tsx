@@ -187,6 +187,19 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
     const localConfig = localStorage.getItem("drm_global_config");
     if (localConfig) setGlobalConfig(JSON.parse(localConfig));
 
+    // Schema version guard — bump this string any time the default profile/data shape changes.
+    // Mismatched version = stale localStorage → wipe and re-seed from defaults.
+    const SCHEMA_VERSION = "v4-bank-details";
+    const storedVersion = localStorage.getItem("drm_schema_version");
+    if (storedVersion !== SCHEMA_VERSION) {
+      // Clear all stale DRM keys so defaults apply fresh
+      [
+        "drm_profiles", "drm_movies", "drm_screens",
+        "drm_alerts", "drm_ledgers", "drm_global_config"
+      ].forEach(k => localStorage.removeItem(k));
+      localStorage.setItem("drm_schema_version", SCHEMA_VERSION);
+    }
+
     // Profiles
     const localProfiles = localStorage.getItem("drm_profiles");
     const defaultProfiles: Profile[] = [
