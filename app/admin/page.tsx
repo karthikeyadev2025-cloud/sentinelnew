@@ -10,7 +10,7 @@ import {
 
 
 export default function AdminPage() {
-  const { currentProfile, globalConfig, updateGlobalConfig, leakAlerts, movies, isLoading } = useDrm();
+  const { currentProfile, globalConfig, updateGlobalConfig, leakAlerts, movies, simulateLeak, isLoading } = useDrm();
   const router = useRouter();
 
   // Role Protection
@@ -537,6 +537,31 @@ export default function AdminPage() {
                       <div className="bg-zinc-900 p-2 border border-purple-900/40 rounded text-purple-300 font-bold text-[10px] select-all mt-3">
                         Payload: {decodedDetails.payload}
                       </div>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const targetMovieId = movies.length > 0 ? movies[0].id : "";
+                            if (!targetMovieId) {
+                              alert("Please register a movie in the Movie Registry first.");
+                              return;
+                            }
+                            await simulateLeak(
+                              targetMovieId,
+                              decodedDetails.theatre,
+                              decodedDetails.city,
+                              decodedDetails.screen.replace("Screen #", ""),
+                              decodedDetails.payload
+                            );
+                            alert("Breach alert successfully saved and recorded to CRM!");
+                          } catch (err) {
+                            console.error(err);
+                            alert("Failed to save breach alert to CRM.");
+                          }
+                        }}
+                        className="w-full mt-3 bg-purple-700 hover:bg-purple-600 text-white font-semibold py-1.5 px-3 rounded text-[10px] transition text-center uppercase tracking-wider"
+                      >
+                        Save Breach Alert to CRM
+                      </button>
                     </div>
                   ) : (
                     <div className="text-zinc-600 text-center py-12">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../lib/supabase";
 
 // Types corresponding to Supabase schemas
@@ -115,6 +115,36 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
         setDeviceFingerprint(generateFingerprint());
       }, 0);
       return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const notifiedAlertIdsRef = useRef<Set<string>>(new Set());
+
+  // Helper to send a native browser notification
+  const sendPushNotification = useCallback((id: string, title: string, body: string) => {
+    if (notifiedAlertIdsRef.current.has(id)) return;
+    notifiedAlertIdsRef.current.add(id);
+
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "granted") {
+        try {
+          new Notification(title, {
+            body,
+            tag: "sentinel-cinema-drm-leak",
+          });
+        } catch (err) {
+          console.warn("Failed to trigger native Notification:", err);
+        }
+      }
+    }
+  }, []);
+
+  // Request browser Notification permission on mount
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "default") {
+        Notification.requestPermission();
+      }
     }
   }, []);
 
@@ -312,6 +342,54 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
 
     fetchRemoteData();
   }, [loadLocalFallbacks]);
+
+  // Setup realtime listeners for Supabase leak alerts
+  useEffect(() => {
+    if (useFallback) return;
+
+    const channel = supabase
+      .channel("realtime-leak-alerts")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "leak_alerts" },
+        async (payload) => {
+          const newAlert = payload.new as LeakAlert;
+          if (notifiedAlertIdsRef.current.has(newAlert.id)) return;
+
+          // Fetch fresh movies and theatre screens list to match titles
+          const { data: refreshedMovs } = await supabase.from("movies").select("*");
+          if (refreshedMovs) setMovies(refreshedMovs);
+
+          const { data: refreshedScreens } = await supabase.from("theatre_screens").select("*");
+          if (refreshedScreens) setTheatreScreens(refreshedScreens);
+
+          const { data: refreshedAlerts } = await supabase.from("leak_alerts").select("*");
+          if (refreshedAlerts) setLeakAlerts(refreshedAlerts);
+
+          const { data: refreshedLeds } = await supabase.from("billing_ledgers").select("*");
+          if (refreshedLeds) setBillingLedgers(refreshedLeds);
+
+          const targetMovie = refreshedMovs?.find((m) => m.id === newAlert.movie_id);
+          const screen = refreshedScreens?.find((s) => s.id === newAlert.theatre_id);
+
+          const movieTitle = targetMovie ? targetMovie.title : "Unknown Movie";
+          const chainName = screen ? screen.chain_name : "Unknown Theater";
+          const city = screen ? screen.city : "Unknown City";
+          const screenNumber = screen ? screen.screen_number : "N/A";
+
+          sendPushNotification(
+            newAlert.id,
+            "⚠️ CRITICAL PIRACY BREACH DETECTED",
+            `Movie: "${movieTitle}" leaked at ${chainName} (${city}), Screen #${screenNumber}. Payload: ${newAlert.payload_string}`
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [useFallback, sendPushNotification]);
 
   // Local sync helper for fallback mode
   const syncLocalProfiles = (updated: Profile[]) => {
@@ -549,6 +627,12 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
         setBillingLedgers(updatedLedgers);
         localStorage.setItem("drm_ledgers", JSON.stringify(updatedLedgers));
       }
+
+      sendPushNotification(
+        newAlert.id,
+        "⚠️ CRITICAL PIRACY BREACH DETECTED (LOCAL)",
+        `Movie: "${targetMovie.title}" leaked at ${chainName} (${city}), Screen #${screenNumber}. Payload: ${payload}`
+      );
       return;
     }
 
@@ -570,12 +654,29 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
 
     if (screen) {
       // 3. Add alert
-      await supabase.from("leak_alerts").insert({
-        movie_id: movieId,
-        theatre_id: screen.id,
-        payload_string: payload,
-        status: "Active",
-      });
+      const { data: newAlert } = await supabase
+        .from("leak_alerts")
+        .insert({
+          movie_id: movieId,
+          theatre_id: screen.id,
+          payload_string: payload,
+          status: "Active",
+        })
+        .select()
+        .single();
+
+      if (newAlert) {
+        // Refresh states first to make sure movies list is fresh
+        const { data: refreshedMovs } = await supabase.from("movies").select("*");
+        if (refreshedMovs) setMovies(refreshedMovs);
+
+        const movieTitle = refreshedMovs?.find((m) => m.id === movieId)?.title || "Unknown Movie";
+        sendPushNotification(
+          newAlert.id,
+          "⚠️ CRITICAL PIRACY BREACH DETECTED",
+          `Movie: "${movieTitle}" leaked at ${chainName} (${city}), Screen #${screenNumber}. Payload: ${payload}`
+        );
+      }
     }
 
     // 4. Update Unpaid ledgers
