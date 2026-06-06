@@ -148,14 +148,20 @@ INSERT INTO global_config (
   'HDFC0001234', 'kiteandtail@hdfcbank', 'Bandra Kurla Complex, Mumbai'
 ) ON CONFLICT (id) DO NOTHING;
 
--- Seed Default Profiles
+-- Seed Default Profiles (DO UPDATE ensures passwords are always correct even on re-run)
 INSERT INTO profiles (
   email, password, role, onboarding_completed,
   trial_uses_remaining, device_fingerprint_hash,
   company_name, gstin, subscription_tier
 ) VALUES
-  ('demo@kiteandtail.com', 'sentinel123', 'STUDIO_CLIENT', TRUE,  999, 'FP_DEMO_OK',   'Kite & Tail Demo',   '27AAAAA3333C1Z3', 'Platinum'),
-  ('producer@kiteandtail.com', 'sentinel123', 'STUDIO_CLIENT', TRUE, 1, 'FP_CLIENT_OK', 'Kite & Tail Studios', '27AAAAA1111A1Z1', 'Gold'),
-  ('admin@kiteandtail.com',    'admin123',    'SUPER_ADMIN',   TRUE, 0, 'FP_ADMIN_OK',  'Kite & Tail Ops',    '27AAAAA2222B1Z2', 'Platinum'),
-  ('abuser@flagged.com',       'sentinel123', 'STUDIO_CLIENT', FALSE,0, 'FP_ABUSE_LOCKED', NULL, NULL, 'Gold')
-ON CONFLICT (email) DO NOTHING;
+  ('demo@kiteandtail.com',     'sentinel123', 'STUDIO_CLIENT', TRUE,  999, 'FP_DEMO_OK',      'Kite & Tail Demo',    '27AAAAA3333C1Z3', 'Platinum'),
+  ('producer@kiteandtail.com', 'sentinel123', 'STUDIO_CLIENT', TRUE,  1,   'FP_CLIENT_OK',    'Kite & Tail Studios', '27AAAAA1111A1Z1', 'Gold'),
+  ('admin@kiteandtail.com',    'admin123',    'SUPER_ADMIN',   TRUE,  0,   'FP_ADMIN_OK',     'Kite & Tail Ops',     '27AAAAA2222B1Z2', 'Platinum'),
+  ('abuser@flagged.com',       'sentinel123', 'STUDIO_CLIENT', FALSE, 0,   'FP_ABUSE_LOCKED', NULL,                  NULL,              'Gold')
+ON CONFLICT (email) DO UPDATE SET
+  password             = EXCLUDED.password,
+  role                 = EXCLUDED.role,
+  onboarding_completed = EXCLUDED.onboarding_completed,
+  subscription_tier    = EXCLUDED.subscription_tier,
+  company_name         = COALESCE(profiles.company_name, EXCLUDED.company_name),
+  gstin                = COALESCE(profiles.gstin, EXCLUDED.gstin);
