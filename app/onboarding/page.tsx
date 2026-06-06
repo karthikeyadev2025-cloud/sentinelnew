@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useDrm } from "../context/DrmContext";
 import { useRouter } from "next/navigation";
-import { Mail, Check, CreditCard, Cpu, Landmark, ArrowRight, ShieldCheck, HelpCircle } from "lucide-react";
+import { Check, CreditCard, Cpu, Landmark, ArrowRight, ShieldCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function OnboardingPage() {
@@ -25,7 +25,10 @@ export default function OnboardingPage() {
         router.push("/dashboard");
       } else {
         // Pre-fill email from profile
-        setEmail(currentProfile.email);
+        const timer = setTimeout(() => {
+          setEmail(currentProfile.email);
+        }, 0);
+        return () => clearTimeout(timer);
       }
     }
   }, [currentProfile, isLoading, router]);
@@ -87,8 +90,9 @@ export default function OnboardingPage() {
         gstin: gstin.toUpperCase(),
       });
       router.push("/dashboard");
-    } catch (err: any) {
-      setErrorMsg(err.message || "Failed to save onboarding data.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(msg || "Failed to save onboarding data.");
     }
   };
 

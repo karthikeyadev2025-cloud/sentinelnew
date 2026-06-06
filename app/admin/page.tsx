@@ -64,6 +64,7 @@ export default function AdminPage() {
       addCvLog("LOADING OPENCV.JS FROM CDN METADATA WORKSPACE...");
       const script = document.createElement("script");
       script.src = "https://docs.opencv.org/4.5.4/opencv.js";
+      script.crossOrigin = "anonymous";
       script.async = true;
       script.onload = () => {
         // OpenCV is not fully initialized immediately even when the script loads.
@@ -169,10 +170,10 @@ export default function AdminPage() {
           let approx = new cv.Mat();
 
           for (let i = 0; i < contours.size(); ++i) {
-            let cnt = contours.get(i);
-            let area = cv.contourArea(cnt);
+            const cnt = contours.get(i);
+            const area = cv.contourArea(cnt);
             if (area > 3000) { // minimum screen area threshold
-              let peri = cv.arcLength(cnt, true);
+              const peri = cv.arcLength(cnt, true);
               cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
               if (approx.rows === 4 && area > maxArea) {
                 maxArea = area;
@@ -182,7 +183,7 @@ export default function AdminPage() {
           }
 
           // 4. Perspective Warp & Flattening
-          let warped = new cv.Mat();
+          const warped = new cv.Mat();
           if (maxContourIdx !== -1 && approx.data32S) {
             // Get coordinates of the 4 contour points
             const p1 = { x: approx.data32S[0], y: approx.data32S[1] };
@@ -195,22 +196,22 @@ export default function AdminPage() {
             const top = pts.slice(0, 2).sort((a, b) => a.x - b.x);
             const bottom = pts.slice(2, 4).sort((a, b) => b.x - a.x);
             
-            let srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            const srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
               top[0].x, top[0].y,
               top[1].x, top[1].y,
               bottom[0].x, bottom[0].y,
               bottom[1].x, bottom[1].y
             ]);
 
-            let dstCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            const dstCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
               0, 0,
               width, 0,
               width, height,
               0, height
             ]);
 
-            let M = cv.getPerspectiveTransform(srcCoords, dstCoords);
-            let dsize = new cv.Size(width, height);
+            const M = cv.getPerspectiveTransform(srcCoords, dstCoords);
+            const dsize = new cv.Size(width, height);
             
             // Warp image
             cv.warpPerspective(src, warped, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
@@ -462,7 +463,18 @@ export default function AdminPage() {
                     const input = document.createElement("input");
                     input.type = "file";
                     input.accept = "video/*";
-                    input.onchange = (e) => handleVideoSelect(e as any);
+                    input.onchange = () => {
+                      if (input.files?.[0]) {
+                        const file = input.files[0];
+                        setDecodingVideo(file);
+                        setDecodedDetails(null);
+                        addCvLog(`SELECTED DEMO SCENE: "${file.name}"`);
+                        const fileUrl = URL.createObjectURL(file);
+                        if (videoRef.current) {
+                          videoRef.current.src = fileUrl;
+                        }
+                      }
+                    };
                     input.click();
                   }}
                 >

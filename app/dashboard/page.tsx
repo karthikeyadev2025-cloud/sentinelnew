@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useDrm, Movie, TheatreScreen, LeakAlert, BillingLedger } from "../context/DrmContext";
+import { useDrm, BillingLedger } from "../context/DrmContext";
 import { useRouter } from "next/navigation";
 import { 
   Film, UploadCloud, AlertOctagon, Receipt, Send, CheckCircle, 
-  HelpCircle, LogOut, Terminal, Cpu, Play, DollarSign, ExternalLink, RefreshCw
+  LogOut, Terminal, Cpu, Play, DollarSign, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -60,12 +60,7 @@ export default function DashboardPage() {
     }
   }, [telemetryLogs]);
 
-  // Set default simMovieId
-  useEffect(() => {
-    if (movies.length > 0 && !simMovieId) {
-      setSimMovieId(movies[0].id);
-    }
-  }, [movies, simMovieId]);
+  // Default movie selection falls back dynamically in select value below without triggering cascading render effects
 
   if (isLoading || !currentProfile) {
     return (
@@ -88,7 +83,7 @@ export default function DashboardPage() {
       setNewMovieTitle("");
       triggerToast(`Ingested ${newMovie.title} into Sentinel tracking mesh.`);
       addLog(`REGISTERED NEW WATERMARK BOUNDARY: "${newMovie.title}"`);
-    } catch (err) {
+    } catch {
       triggerToast("Failed to register movie asset.");
     }
   };
@@ -210,17 +205,18 @@ export default function DashboardPage() {
   // Simulate a leak on click
   const handleSimulateLeakSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!simMovieId) {
+    const activeMovieId = simMovieId || (movies.length > 0 ? movies[0].id : "");
+    if (!activeMovieId) {
       triggerToast("Register a movie first before simulating a leak.");
       return;
     }
-    const targetMovie = movies.find(m => m.id === simMovieId);
+    const targetMovie = movies.find(m => m.id === activeMovieId);
     if (!targetMovie) return;
 
-    // Use default payload if empty
-    const finalPayload = simPayload.trim() || `${simChain.substring(0,3).toUpperCase()}_${simCity.substring(0,3).toUpperCase()}_S${simScreen}_ID${Math.floor(Math.random()*100)}`;
+    // Call external helper to keep component render phase pure
+    const finalPayload = generateRandomPayload(simPayload, simChain, simCity, simScreen);
 
-    simulateLeak(simMovieId, simChain, simCity, simScreen, finalPayload);
+    simulateLeak(activeMovieId, simChain, simCity, simScreen, finalPayload);
     triggerToast(`Piracy leak simulated in ${simChain} (${simCity}). Alert pulsing.`);
     addLog(`⚠️ BREACH TELEMETRY RECEIVED: SKEWED FOOTAGE IDENTIFIED AT ${simChain.toUpperCase()}, CITY: ${simCity.toUpperCase()}`);
   };
@@ -610,7 +606,7 @@ export default function DashboardPage() {
                 <div>
                   <label className="block text-zinc-500 mb-1 text-[10px]">Select Target Movie</label>
                   <select 
-                    value={simMovieId} 
+                    value={simMovieId || (movies.length > 0 ? movies[0].id : "")} 
                     onChange={(e) => setSimMovieId(e.target.value)}
                     className="w-full bg-zinc-950 border border-zinc-850 rounded p-1 text-zinc-300 focus:outline-none"
                   >
@@ -780,4 +776,9 @@ export default function DashboardPage() {
       )}
     </div>
   );
+}
+
+// Pure helper function declared outside React component scope to satisfy strict linter checks
+function generateRandomPayload(simPayload: string, simChain: string, simCity: string, simScreen: string): string {
+  return simPayload.trim() || `${simChain.substring(0,3).toUpperCase()}_${simCity.substring(0,3).toUpperCase()}_S${simScreen}_ID${Math.floor(Math.random()*100)}`;
 }

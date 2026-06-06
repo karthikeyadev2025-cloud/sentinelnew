@@ -12,7 +12,6 @@ export default function LoginPage() {
   
   const [email, setEmail] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isAbused, setIsAbused] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -54,7 +53,6 @@ export default function LoginPage() {
     e.preventDefault();
     if (!email) return;
 
-    setErrorMsg(null);
     setIsVerifying(true);
     
     // Telemetry log addition
@@ -75,9 +73,8 @@ export default function LoginPage() {
         } else {
           router.push("/onboarding");
         }
-      } catch (err: any) {
+      } catch {
         setIsAbused(true);
-        setErrorMsg(err.message || "Security violation detected.");
         setLogs(prev => [
           ...prev,
           "❌ HANDSHAKE ABORTED.",
@@ -157,7 +154,6 @@ export default function LoginPage() {
                   onClick={() => {
                     setIsAbused(false);
                     setEmail("");
-                    setErrorMsg(null);
                   }}
                   className="flex-1 py-2 rounded-lg bg-zinc-900 border border-zinc-850 hover:bg-zinc-850 text-zinc-300 text-sm font-semibold transition"
                 >

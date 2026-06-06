@@ -111,80 +111,15 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
         }
         return "FP_" + Math.abs(hash).toString(16).toUpperCase();
       };
-      setDeviceFingerprint(generateFingerprint());
+      const timer = setTimeout(() => {
+        setDeviceFingerprint(generateFingerprint());
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, []);
 
-  // Hydrate State: Connects to Supabase; falls back to LocalStorage if tables don't exist
-  useEffect(() => {
-    const fetchRemoteData = async () => {
-      try {
-        setIsLoading(true);
-        // Test connectivity by reading global configuration
-        const { data: configData, error: configError } = await supabase
-          .from("global_config")
-          .select("*")
-          .eq("id", 1)
-          .maybeSingle();
-
-        if (configError) {
-          throw new Error("Supabase tables not initialized. Activating localStorage mode.");
-        }
-
-        if (configData) {
-          setGlobalConfig(configData);
-        } else {
-          // Setup initial configuration row if empty
-          await supabase.from("global_config").insert({ id: 1, ...DEFAULT_GLOBAL_CONFIG });
-        }
-
-        // Fetch remaining tables
-        const { data: profs } = await supabase.from("profiles").select("*");
-        if (profs) setProfiles(profs);
-
-        const { data: movs } = await supabase.from("movies").select("*");
-        if (movs) setMovies(movs);
-
-        const { data: screens } = await supabase.from("theatre_screens").select("*");
-        if (screens) setTheatreScreens(screens);
-
-        const { data: alerts } = await supabase.from("leak_alerts").select("*");
-        if (alerts) setLeakAlerts(alerts);
-
-        const { data: ledgers } = await supabase.from("billing_ledgers").select("*");
-        if (ledgers) setBillingLedgers(ledgers);
-
-        // Restore active user session from sessionStorage
-        const savedSession = sessionStorage.getItem("drm_current_profile");
-        if (savedSession) {
-          const sessionUser = JSON.parse(savedSession);
-          // Refetch fresh profile data
-          const { data: freshProf } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", sessionUser.id)
-            .maybeSingle();
-          if (freshProf) {
-            setCurrentProfile(freshProf);
-            sessionStorage.setItem("drm_current_profile", JSON.stringify(freshProf));
-          } else {
-            setCurrentProfile(sessionUser);
-          }
-        }
-      } catch (err) {
-        console.warn("DrmContext: Supabase connection failed. Falling back to local state.", err);
-        setUseFallback(true);
-        loadLocalFallbacks();
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchRemoteData();
-  }, []);
-
   // LocalStorage Loading Fallback
-  const loadLocalFallbacks = () => {
+  function loadLocalFallbacks() {
     // Global Config
     const localConfig = localStorage.getItem("drm_global_config");
     if (localConfig) setGlobalConfig(JSON.parse(localConfig));
@@ -308,7 +243,75 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
     // Session Profile
     const sessionProfile = sessionStorage.getItem("drm_current_profile");
     if (sessionProfile) setCurrentProfile(JSON.parse(sessionProfile));
-  };
+  }
+
+  // Hydrate State: Connects to Supabase; falls back to LocalStorage if tables don't exist
+  useEffect(() => {
+    const fetchRemoteData = async () => {
+      try {
+        setIsLoading(true);
+        // Test connectivity by reading global configuration
+        const { data: configData, error: configError } = await supabase
+          .from("global_config")
+          .select("*")
+          .eq("id", 1)
+          .maybeSingle();
+
+        if (configError) {
+          throw new Error("Supabase tables not initialized. Activating localStorage mode.");
+        }
+
+        if (configData) {
+          setGlobalConfig(configData);
+        } else {
+          // Setup initial configuration row if empty
+          await supabase.from("global_config").insert({ id: 1, ...DEFAULT_GLOBAL_CONFIG });
+        }
+
+        // Fetch remaining tables
+        const { data: profs } = await supabase.from("profiles").select("*");
+        if (profs) setProfiles(profs);
+
+        const { data: movs } = await supabase.from("movies").select("*");
+        if (movs) setMovies(movs);
+
+        const { data: screens } = await supabase.from("theatre_screens").select("*");
+        if (screens) setTheatreScreens(screens);
+
+        const { data: alerts } = await supabase.from("leak_alerts").select("*");
+        if (alerts) setLeakAlerts(alerts);
+
+        const { data: ledgers } = await supabase.from("billing_ledgers").select("*");
+        if (ledgers) setBillingLedgers(ledgers);
+
+        // Restore active user session from sessionStorage
+        const savedSession = sessionStorage.getItem("drm_current_profile");
+        if (savedSession) {
+          const sessionUser = JSON.parse(savedSession);
+          // Refetch fresh profile data
+          const { data: freshProf } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", sessionUser.id)
+            .maybeSingle();
+          if (freshProf) {
+            setCurrentProfile(freshProf);
+            sessionStorage.setItem("drm_current_profile", JSON.stringify(freshProf));
+          } else {
+            setCurrentProfile(sessionUser);
+          }
+        }
+      } catch (err) {
+        console.warn("DrmContext: Supabase connection failed. Falling back to local state.", err);
+        setUseFallback(true);
+        loadLocalFallbacks();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchRemoteData();
+  }, []);;
 
   // Local sync helper for fallback mode
   const syncLocalProfiles = (updated: Profile[]) => {
@@ -351,7 +354,7 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
 
     // Supabase Mode
     // 1. Fetch matching profiles
-    const { data: matched, error } = await supabase
+    const { data: matched } = await supabase
       .from("profiles")
       .select("*")
       .eq("email", email.toLowerCase())
