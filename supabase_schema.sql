@@ -62,8 +62,28 @@ CREATE TABLE IF NOT EXISTS global_config (
   base_retainer_price NUMERIC DEFAULT 300000,
   screen_fee_price NUMERIC DEFAULT 20000,
   bounty_reward_price NUMERIC DEFAULT 60000,
-  css_primary_color TEXT DEFAULT '#3b82f6'
+  css_primary_color TEXT DEFAULT '#3b82f6',
+  -- Bank settlement details (displayed to clients in billing dashboard)
+  bank_name TEXT DEFAULT 'HDFC Bank',
+  bank_account_holder TEXT DEFAULT 'Kite & Tail Cybersecurity Pvt. Ltd.',
+  bank_account_number TEXT DEFAULT '50200093847561',
+  bank_ifsc_code TEXT DEFAULT 'HDFC0001234',
+  bank_upi_id TEXT DEFAULT 'kiteandtail@hdfcbank',
+  bank_branch_name TEXT DEFAULT 'Bandra Kurla Complex, Mumbai'
 );
+
+-- If global_config table already exists (existing deployments), add bank columns safely:
+ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_name TEXT DEFAULT 'HDFC Bank';
+ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_account_holder TEXT DEFAULT 'Kite & Tail Cybersecurity Pvt. Ltd.';
+ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_account_number TEXT DEFAULT '50200093847561';
+ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_ifsc_code TEXT DEFAULT 'HDFC0001234';
+ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_upi_id TEXT DEFAULT 'kiteandtail@hdfcbank';
+ALTER TABLE global_config ADD COLUMN IF NOT EXISTS bank_branch_name TEXT DEFAULT 'Bandra Kurla Complex, Mumbai';
+
+-- Seed Initial Global Config
+INSERT INTO global_config (id, base_retainer_price, screen_fee_price, bounty_reward_price, css_primary_color, bank_name, bank_account_holder, bank_account_number, bank_ifsc_code, bank_upi_id, bank_branch_name)
+VALUES (1, 300000, 20000, 60000, '#3b82f6', 'HDFC Bank', 'Kite & Tail Cybersecurity Pvt. Ltd.', '50200093847561', 'HDFC0001234', 'kiteandtail@hdfcbank', 'Bandra Kurla Complex, Mumbai')
+ON CONFLICT (id) DO NOTHING;
 
 -- Row Level Security (RLS) Configurations
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;

@@ -342,18 +342,12 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
           throw new Error("Supabase tables not initialized. Activating localStorage mode.");
         }
 
-        // Verify that the profiles table has the schema columns password and subscription_tier
-        const { error: schemaCheckError } = await supabase
-          .from("profiles")
-          .select("password, subscription_tier")
-          .limit(1);
-
-        if (schemaCheckError) {
-          throw new Error("Supabase profiles table schema is outdated/incomplete. Activating localStorage mode.");
-        }
+        // Note: We no longer do a strict schema column probe that causes 400s.
+        // If global_config is reachable, we proceed — column mismatches are caught per-query below.
 
         if (configData) {
-          setGlobalConfig(configData);
+          // Merge remote config with defaults (gracefully handles missing bank columns)
+          setGlobalConfig({ ...DEFAULT_GLOBAL_CONFIG, ...configData });
         } else {
           // Setup initial configuration row if empty
           await supabase.from("global_config").insert({ id: 1, ...DEFAULT_GLOBAL_CONFIG });

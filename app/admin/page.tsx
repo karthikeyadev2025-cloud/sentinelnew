@@ -183,10 +183,10 @@ export default function AdminPage() {
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (typeof window !== "undefined" && !(window as any).cv) {
-      addCvLog("LOADING OPENCV.JS FROM CDN METADATA WORKSPACE...");
+      addCvLog("LOADING OPENCV.JS VIA SERVER PROXY (CORS-SAFE)...");
       const script = document.createElement("script");
-      script.src = "https://docs.opencv.org/4.5.4/opencv.js";
-      script.crossOrigin = "anonymous";
+      // Use same-origin proxy to avoid CORS blocking from docs.opencv.org
+      script.src = "/api/opencv";
       script.async = true;
       script.onload = () => {
         const checkCv = setInterval(() => {
