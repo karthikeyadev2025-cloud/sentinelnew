@@ -229,7 +229,7 @@ export default function LoginPage() {
           {logs.map((log, index) => (
             <div key={index} className="truncate">
               <span className="text-zinc-600 mr-2">[{new Date().toLocaleTimeString()}]</span>
-              <span className={log.includes("❌") || log.includes("CRITICAL") ? "text-red-400" : log.includes("SUCCESS") || log.includes("COMPUTING") ? "text-cyan-300" : "text-zinc-400"}>
+              <span className={log && (log.includes("❌") || log.includes("CRITICAL")) ? "text-red-400" : log && (log.includes("SUCCESS") || log.includes("COMPUTING")) ? "text-cyan-300" : "text-zinc-400"}>
                 {log}
               </span>
             </div>

@@ -598,7 +598,7 @@ export default function AdminPage() {
                 ) : (
                   cvLogs.map((log, index) => (
                     <div key={index}>
-                      <span className={log.includes("✅") ? "text-emerald-400" : log.includes("❌") ? "text-red-400" : "text-zinc-400"}>
+                      <span className={log && log.includes("✅") ? "text-emerald-400" : log && log.includes("❌") ? "text-red-400" : "text-zinc-400"}>
                         {log}
                       </span>
                     </div>

@@ -582,7 +582,7 @@ export default function DashboardPage() {
               ) : (
                 telemetryLogs.map((log, index) => (
                   <div key={index} className="leading-relaxed">
-                    <span className={log.includes("⚠️") || log.includes("BREACH") ? "text-red-400" : log.includes("FFMPEG") ? "text-cyan-300" : log.includes("MEMORY") ? "text-amber-400" : "text-zinc-400"}>
+                    <span className={log && (log.includes("⚠️") || log.includes("BREACH")) ? "text-red-400" : log && log.includes("FFMPEG") ? "text-cyan-300" : log && log.includes("MEMORY") ? "text-amber-400" : "text-zinc-400"}>
                       {log}
                     </span>
                   </div>
