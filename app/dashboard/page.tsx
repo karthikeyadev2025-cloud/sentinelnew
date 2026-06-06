@@ -80,13 +80,17 @@ export default function DashboardPage() {
     setTimeout(() => setToastMsg(null), 4000);
   };
 
-  const handleAddMovie = (e: React.FormEvent) => {
+  const handleAddMovie = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMovieTitle.trim()) return;
-    const newMovie = addMovie(newMovieTitle);
-    setNewMovieTitle("");
-    triggerToast(`Ingested ${newMovie.title} into Sentinel tracking mesh.`);
-    addLog(`REGISTERED NEW WATERMARK BOUNDARY: "${newMovie.title}"`);
+    try {
+      const newMovie = await addMovie(newMovieTitle);
+      setNewMovieTitle("");
+      triggerToast(`Ingested ${newMovie.title} into Sentinel tracking mesh.`);
+      addLog(`REGISTERED NEW WATERMARK BOUNDARY: "${newMovie.title}"`);
+    } catch (err) {
+      triggerToast("Failed to register movie asset.");
+    }
   };
 
   const addLog = (log: string) => {
