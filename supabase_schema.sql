@@ -20,6 +20,16 @@ CREATE TABLE IF NOT EXISTS profiles (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Safely add any missing columns to existing profiles tables
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS password TEXT DEFAULT 'sentinel123';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'STUDIO_CLIENT';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS trial_uses_remaining INT DEFAULT 2;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS device_fingerprint_hash TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS company_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gstin TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS subscription_tier TEXT DEFAULT 'Gold';
+
 -- 2. Movies Table
 CREATE TABLE IF NOT EXISTS movies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
