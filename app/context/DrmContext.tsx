@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 
 // Types corresponding to Supabase schemas
@@ -119,7 +119,7 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // LocalStorage Loading Fallback
-  function loadLocalFallbacks() {
+  const loadLocalFallbacks = useCallback(() => {
     // Global Config
     const localConfig = localStorage.getItem("drm_global_config");
     if (localConfig) setGlobalConfig(JSON.parse(localConfig));
@@ -243,7 +243,7 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
     // Session Profile
     const sessionProfile = sessionStorage.getItem("drm_current_profile");
     if (sessionProfile) setCurrentProfile(JSON.parse(sessionProfile));
-  }
+  }, []);
 
   // Hydrate State: Connects to Supabase; falls back to LocalStorage if tables don't exist
   useEffect(() => {
@@ -311,7 +311,7 @@ export function DrmProvider({ children }: { children: React.ReactNode }) {
     };
 
     fetchRemoteData();
-  }, []);;
+  }, [loadLocalFallbacks]);
 
   // Local sync helper for fallback mode
   const syncLocalProfiles = (updated: Profile[]) => {

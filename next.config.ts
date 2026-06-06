@@ -1,11 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable local route caching validation
-  cacheComponents: true,
-  experimental: {
-    instantNavigationDevToolsToggle: true,
-  },
+  // Turbopack config (Next.js 16 default bundler)
+  // Empty object silences the webpack-config conflict error
+  turbopack: {},
   async headers() {
     return [
       {
@@ -22,16 +20,6 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
-  },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        fs: false,
-        path: false,
-        crypto: false,
-      };
-    }
-    return config;
   },
 };
 

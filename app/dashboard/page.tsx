@@ -192,8 +192,6 @@ export default function DashboardPage() {
     URL.revokeObjectURL(url);
   };
 
-  const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-
   // Takedown dispatch with rewards
   const handleTakedown = (alertId: string, movieTitle: string) => {
     dispatchTakedown(alertId);
@@ -782,3 +780,6 @@ export default function DashboardPage() {
 function generateRandomPayload(simPayload: string, simChain: string, simCity: string, simScreen: string): string {
   return simPayload.trim() || `${simChain.substring(0,3).toUpperCase()}_${simCity.substring(0,3).toUpperCase()}_S${simScreen}_ID${Math.floor(Math.random()*100)}`;
 }
+
+// Pure utility: delay helper outside component to prevent recreation on every render
+const delay = (ms: number) => new Promise<void>(res => setTimeout(res, ms));

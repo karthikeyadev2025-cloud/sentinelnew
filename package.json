@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "test": "jest",
-    "dev": "next dev --webpack",
-    "build": "next build --webpack",
+    "dev": "next dev",
+    "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint app"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

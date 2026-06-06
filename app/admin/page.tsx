@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDrm } from "../context/DrmContext";
 import { useRouter } from "next/navigation";
 import { 
-  Shield, DollarSign, Cpu, Settings, Play, Pause, Terminal, 
-  Upload, AlertTriangle, ArrowLeft, RefreshCw, Compass
+  Shield, Cpu, Settings, Play, Pause, 
+  Upload, AlertTriangle, ArrowLeft, Compass
 } from "lucide-react";
-import { motion } from "framer-motion";
+
 
 export default function AdminPage() {
-  const { currentProfile, globalConfig, updateGlobalConfig, leakAlerts, movies, resetAllData, isLoading } = useDrm();
+  const { currentProfile, globalConfig, updateGlobalConfig, leakAlerts, movies, isLoading } = useDrm();
   const router = useRouter();
 
   // Role Protection
@@ -101,19 +101,6 @@ export default function AdminPage() {
     addCvLog(`CMS CONFIG SAVED: RETAINER=${basePrice}, SCREENS=${screenPrice}, BOUNTY=${bountyPrice}`);
   };
 
-  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setDecodingVideo(file);
-      setDecodedDetails(null);
-      addCvLog(`SELECTED DEMO SCENE: "${file.name}"`);
-      
-      const fileUrl = URL.createObjectURL(file);
-      if (videoRef.current) {
-        videoRef.current.src = fileUrl;
-      }
-    }
-  };
 
   // OpenCV Frame Processing Loop
   useEffect(() => {
@@ -508,7 +495,7 @@ export default function AdminPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={togglePlayState}
-                        className="bg-purple-650 hover:bg-purple-600 text-white font-bold py-1 px-3 rounded text-[10px] transition flex items-center gap-1"
+                        className="bg-purple-700 hover:bg-purple-600 text-white font-bold py-1 px-3 rounded text-[10px] transition flex items-center gap-1"
                       >
                         {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
                         {isPlaying ? "Pause CV" : "Run CV"}
